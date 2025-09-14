@@ -60,6 +60,9 @@ export default function TagMultiSelect({ familyId, value, onChange, placeholder 
   }, [open]);
 
   const selected = value.map(id => tags.find(t => t.id === id)).filter(Boolean) as Tag[];
+  function tagStyle(color?: string): React.CSSProperties {
+    return color ? ({ ['--tag' as any]: color } as React.CSSProperties) : ({} as React.CSSProperties);
+  }
 
   // Measure if a text fits inside the label span
   function fits(text: string) {
@@ -100,7 +103,23 @@ export default function TagMultiSelect({ familyId, value, onChange, placeholder 
         style={{ width: '100%', justifyContent: 'space-between' }}
         ref={triggerRef}
       >
-        <span ref={labelRef} className="selector-value">{computeLabel()}</span>
+        <div className="row" style={{ flex:1, flexWrap:'nowrap', gap:6, overflow:'hidden', minWidth:0 }}>
+          {selected.length > 0 ? (
+            selected.map(t => (
+              <span key={t.id} className="tag-pill selected" style={tagStyle(t.color)}>
+                {t.name}
+                <button
+                  type="button"
+                  className="x"
+                  onClick={(e) => { e.stopPropagation(); toggle(t.id); }}
+                  aria-label={`Remover ${t.name}`}
+                >×</button>
+              </span>
+            ))
+          ) : (
+            <span ref={labelRef} className="selector-value">{placeholder || 'Filtrar por tags…'}</span>
+          )}
+        </div>
         <span aria-hidden>▾</span>
       </button>
 
@@ -114,11 +133,6 @@ export default function TagMultiSelect({ familyId, value, onChange, placeholder 
                 aria-multiselectable={true}
                 style={{ position: 'fixed', left: coords.left, top: coords.top, width: coords.width, right: 'auto', zIndex: 3000, minWidth: 0, maxWidth: 'none' }}
               >
-                <div className="field"><input placeholder="Buscar..." value={q} onChange={(e)=>setQ(e.target.value)} autoFocus /></div>
-                <div className="actions" style={{ justifyContent:'space-between' }}>
-                  <span className="muted">{selected.length} selecionada(s)</span>
-                  {selected.length > 0 && <button type="button" onClick={clear}>Limpar</button>}
-                </div>
 
                 <div className="tags-grid" style={{ marginTop: '.5rem', maxHeight: 240, overflowY: 'auto', display:'flex', flexWrap:'wrap', gap: 8, padding: '0 8px 8px' }}>
                   {filtered.length === 0 ? (
@@ -128,8 +142,8 @@ export default function TagMultiSelect({ familyId, value, onChange, placeholder 
                       const selected = value.includes(t.id);
                       const color = t.color || 'var(--primary)';
                       const style = selected
-                        ? { background: color, borderColor: color, color: '#fff' }
-                        : { background: '#111827', borderColor: color, color: 'var(--fg)' };
+                        ? { background: color, borderColor: '#fff', color: '#fff', borderWidth: 2 }
+                        : { background: color, borderColor: 'transparent', color: '#fff' };
                       return (
                         <button
                           key={t.id}
@@ -149,11 +163,6 @@ export default function TagMultiSelect({ familyId, value, onChange, placeholder 
             )
           : (
             <div className="dropdown-panel" role="listbox" aria-multiselectable={true}>
-              <div className="field"><input placeholder="Buscar..." value={q} onChange={(e)=>setQ(e.target.value)} autoFocus /></div>
-              <div className="actions" style={{ justifyContent:'space-between' }}>
-                <span className="muted">{selected.length} selecionada(s)</span>
-                {selected.length > 0 && <button type="button" onClick={clear}>Limpar</button>}
-              </div>
 
               <div className="col" style={{ marginTop: '.5rem', maxHeight: 240, overflowY: 'auto' }}>
                 {filtered.length === 0 ? (

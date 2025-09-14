@@ -130,14 +130,31 @@ export default function UserMultiSelect({ familyId, value, onChange, onModeChang
             flexWrap: 'nowrap', // mantém uma linha
           }}
         >
-          <span
-            ref={labelRef}
-            className="selector-value"
-            style={{ flex: '1 1 auto', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-          >
-            {computeLabel()}
-          </span>
-          <span aria-hidden>▾</span>
+{(!allActiveSelected && value.length) ? (
+  <div className="row" style={{ flex:1, gap:6, overflow:'hidden', whiteSpace:'nowrap', minWidth:0 }}>
+    {members.filter(m => value.includes(String(m.id))).map(m => (
+      <span key={m.id} className="tag-pill selected">
+        {m.display_name}
+        <button
+          type="button"
+          className="x"
+          onClick={(e) => { e.stopPropagation(); onToggle(String(m.id)); }}
+          aria-label={`Remover ${m.display_name}`}
+        >×</button>
+      </span>
+    ))}
+  </div>
+) : (
+  <span
+    ref={labelRef}
+    className="selector-value"
+    style={{ flex: '1 1 auto', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+  >
+    {computeLabel()}
+  </span>
+)}
+<span aria-hidden>▾</span>
+
         </button>
 
 

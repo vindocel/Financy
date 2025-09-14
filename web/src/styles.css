@@ -21,8 +21,8 @@ button.primary { background: var(--primary); border-color: transparent; color:#f
 .row { display:flex; gap:.75rem; align-items: center }
 .col { display:flex; flex-direction: column; gap:.5rem }
 .grid { display:grid; gap: .75rem }
-.grid.cols-2 { grid-template-columns: 1fr 1fr }
-.grid.cols-3 { grid-template-columns: repeat(3, 1fr) }
+.grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+.grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) }
 .header { display:flex; align-items:center; justify-content: space-between; gap:1rem; padding: .75rem 1rem; position: sticky; top: 0; background: var(--bg); border-bottom:1px solid var(--border); z-index:10 }
 .title { font-weight: 600 }
 .menu { display:flex; gap:.5rem; align-items:center }
@@ -67,7 +67,12 @@ dialog .modal { width:min(780px, 96vw); max-height: 88vh; overflow:auto; }
   display:flex; align-items:center; gap:.5rem;
   min-height:40px; padding:6px 10px;
   white-space:nowrap; overflow:hidden;
+
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
+
 
 /* Texto do gatilho com reticências quando não couber */
 .selector .selector-value{
@@ -83,8 +88,7 @@ dialog .modal { width:min(780px, 96vw); max-height: 88vh; overflow:auto; }
 }
 
 /* Esconde qualquer “chip” dentro do gatilho para não “engordar” a barra */
-.selector-trigger .chip,
-.selector-trigger .row { display:none !important; }
+/* removed: chips are now visible in trigger */
 
 /* === Alinhamento dos itens do menu de usuários === */
 .dropdown-panel .col label.row{
@@ -115,12 +119,31 @@ dialog .modal { width:min(780px, 96vw); max-height: 88vh; overflow:auto; }
 }
 
 /* Pills de tags no seletor */
+
 .tag-pill{
-  display:inline-flex; align-items:center; gap:.25rem;
-  border-radius:999px; padding:.35rem .7rem;
-  border:1px solid var(--border); background:#111827; color:var(--fg);
-  cursor:pointer; user-select:none;
+  --tag: #64748b;
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  font-size:.85rem;
+  line-height:1;
+  padding:.25rem .5rem;
+  border-radius:.375rem;
+  border:1px solid transparent;
+  background: var(--tag);
+  color: #fff;
+  cursor:pointer;
+  user-select:none;
 }
+.tag-pill:hover{
+  filter: brightness(1.05);
+}
+.tag-pill.selected{
+  border-color: #fff;
+  background: var(--tag);
+  color: #fff;
+}
+
 .tag-pill.selected{ border-color: transparent; color:#fff; }
 
 /* ícones compactos nos inputs (olho/copiar) */
@@ -170,3 +193,127 @@ input.color-input{ width:48px; height: var(--btn-h); padding:0; border:1px solid
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.06);
 }
 
+/* === Tables === */
+.table{ width:100%; border-collapse: separate; border-spacing:0; }
+.table thead th{ text-align:left; font-size:.95rem; color:var(--muted); padding:10px 12px; border-bottom:1px solid var(--border); }
+.table tbody td{ padding:12px; vertical-align:middle; }
+.table tbody tr + tr td{ border-top:1px solid var(--border); }
+.table tbody tr:hover{ background: rgba(255,255,255,.03); }
+.table td.num{ text-align:right; white-space:nowrap; }
+
+/* === Pills (tags / MtP) === */
+.pill{ display:inline-flex; align-items:center; gap:.35rem; padding:.25rem .6rem; border-radius:999px; border:1px solid var(--border); background:#111827; color:var(--fg); font-size:.85rem; }
+.pill + .pill{ margin-left:.35rem; }
+.pill.credito{ background:#1d4ed8; color:#fff; border-color:transparent; }
+.pill.debito{ background:#0f766e; color:#fff; border-color:transparent; }
+.pill.dinheiro{ background:#065f46; color:#fff; border-color:transparent; }
+.pill.pix{ background:#365314; color:#fff; border-color:transparent; }
+.pill.ticket{ background:#7c2d12; color:#fff; border-color:transparent; }
+
+
+/* Alinha números à direita e usa tabular-nums para não “pular” */
+.table th.num, .table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Pílulas (tags/MtP) – mantém o visual da sua 4ª imagem */
+.pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+/* Opcional: espaçamento no cabeçalho do modal de Configurações */
+.card.modal h3 { font-size: 1.25rem; }
+.card.modal .row > button[aria-selected="true"] { outline: 2px solid var(--border); border-radius: 8px; }
+
+/* ===== Input com botões embutidos (Mostrar/Copiar) ===== */
+.input-with-actions{ position: relative; }
+.input-with-actions > input{
+  padding-right: 110px; /* espaço pros 2 botões */
+}
+.input-action{
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 28px;
+  padding: 0 .5rem;
+  border-radius: .45rem;
+}
+.input-action--toggle{ right: 70px; }
+.input-action--copy{ right: 8px; }
+
+/* ===== Lista de membros com botão à direita ===== */
+.members{
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: .6rem;
+  background: #0b1327;
+  overflow: hidden;
+}
+.members li{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: .5rem .75rem;
+  padding: .7rem .8rem;
+  border-top: 1px solid var(--border);
+}
+.members li:first-child{ border-top: 0; }
+.members .name{ font-weight: 500; }
+.members .kick{ justify-self: end; }
+
+
+
+/* === Tag chips modern look & chips in trigger === */
+
+/* trigger layout allows wrapping chips */
+.selector .selector-trigger{
+  display:flex;
+  align-items:center;
+  flex-wrap: wrap;
+  gap:.35rem;
+  min-height:40px;
+  padding:6px 10px;
+}
+
+/* Badge style (smaller, subtle rounded) - SOLID FILL */
+.tag-pill{
+  --tag: #64748b;
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  font-size:.85rem;
+  line-height:1;
+  padding:.25rem .5rem;
+  border-radius:.375rem;
+  border:1px solid transparent;
+  background: var(--tag);
+  /* texto acompanha a cor do fundo (tom mais claro do mesmo matiz) */
+  color: color-mix(in srgb, var(--tag) 20%, white 80%);
+  cursor:pointer;
+  user-select:none;
+}
+.tag-pill:hover{ filter: brightness(1.05); }
+.tag-pill.selected{
+  border-color: transparent; /* sem borda branca */
+  background: var(--tag);
+  color: color-mix(in srgb, var(--tag) 20%, white 80%);
+}
+
+/* Botão de fechar no chip selecionado (no trigger) */
+.tag-pill .x{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:18px; height:18px; border-radius:.25rem;
+  border: none; background: transparent; color: inherit;
+  opacity:.8; cursor:pointer;
+}
+.tag-pill .x:hover{ opacity:1; background: rgba(255,255,255,.12); }
+
+/* allow items in grids to shrink */
+.grid > * { min-width: 0; }

@@ -1,4 +1,4 @@
-// server.js (fixed)
+// server.js (completo)
 import express from "express";
 import cookieParser from "cookie-parser";
 import fs from "fs";
@@ -53,6 +53,7 @@ if (!DATABASE_URL) {
   console.error("DATABASE_URL é obrigatório. Configure o banco de dados.");
   process.exit(1);
 }
+
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl:
@@ -65,6 +66,7 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
 });
+
 const DB_ENABLED = true;
 console.log("🗄️ DB: PostgreSQL habilitado");
 
@@ -1178,6 +1180,19 @@ app.delete(
   })
 );
 
+
+// ---- Money helpers (pt-BR) ----
+function parseMoneyBR(s) {
+  if (typeof s === 'number') return s;
+  if (!s) return 0;
+  const str = String(s).trim();
+  const hasComma = str.includes(',');
+  const hasDot = str.includes('.');
+  if (hasComma && !hasDot) return Number(str.replace(/\./g,'').replace(',','.')) || 0;
+  if (hasDot && !hasComma) return Number(str) || 0;
+  return Number(str.replace(/\./g,'').replace(',','.')) || 0;
+}
+function round2(n) { return Math.round((Number(n)||0) * 100) / 100; }
 // ====== Purchases ======
 // Criar compra
 app.post(
@@ -1193,32 +1208,30 @@ app.post(
     if (isNaN(emissao.getTime())) emissao = new Date();
 
     const mtpNorm = normalizeMtp(req.body.mtp || null);
+const discountNorm = parseMoneyBR(req.body.discount ?? 0);
+let computedTotal = parseMoneyBR(req.body.total ?? 0);
 
-    const discountNorm = Number(req.body.discount || 0) || 0;
-    const computedTotal = Number(req.body.total || 0);
-    if (!computedTotal || computedTotal <= 0) {
-      return res.status(400).json({ error: "invalid_total" });
-    }
+// Tipo/parcelas (ajuste: parcelado requer >=2; caso contrário, à vista)
+let tipo = req.body.pagamento_tipo === "parcelado" ? "parcelado" : "avista";
+let parcelas = Number(req.body.pagamento_parcelas || 1);
+if (!parcelas || parcelas < 1) parcelas = 1;
+if (tipo === "parcelado" && parcelas < 2) { tipo = "avista"; parcelas = 1; }
 
-    // Tipo/parcelas (evitar violar constraint de mtp x pagamento_tipo)
-    let tipo = req.body.pagamento_tipo === "parcelado" ? "parcelado" : "avista";
-    let parcelas = Number(req.body.pagamento_parcelas || 1);
-    if (!parcelas || parcelas < 1) parcelas = 1;
-
-    if (mtpNorm === "credito" && tipo === "avista") {
-      // cartão de crédito tratado como "parcelado" (mesmo 1x) para respeitar constraint
-      tipo = "parcelado";
-      if (parcelas < 1) parcelas = 1;
-    }
-
-    const itemsRaw = Array.isArray(req.body.items) ? req.body.items : [];
+const itemsRaw = Array.isArray(req.body.items) ? req.body.items : [];
     const itemsNorm = itemsRaw.map((it) => ({
       name: String(it?.name || "Item"),
       qty: Number(it?.qty || 1) || 1,
-      total: Number(it?.total || 0) || 0,
+      total: parseMoneyBR(it?.total || 0),
     }));
 
-    // IDs de tags vindos do front
+    
+    // Server-side recalc do total
+    const sumItems = itemsNorm.reduce((acc, it) => acc + (Number(it.total) || 0), 0);
+    const calc = round2(sumItems - discountNorm);
+    if (calc > 0 && Math.abs(calc - computedTotal) > 0.009) computedTotal = calc;
+    if (!(computedTotal > 0)) { return res.status(400).json({ error: "invalid_total" }); }
+
+// IDs de tags vindos do front
     let tagIds = Array.isArray(req.body.tags) ? req.body.tags.filter(Boolean) : [];
 
     const client = await pool.connect();
@@ -1319,8 +1332,9 @@ app.get(
     const userParam = req.query.user ?? "me";
     const mtpQ = normalizeMtp(req.query.mtp || "");
     const { month } = req.query;
+    const view = String(req.query.view || "parcelas"); // 'parcelas' (default) ou 'compras'
 
-    // tags: aceita ids via tags[] e nome via tag (compat)
+    // tags: ids via tags[] e nome via tag (compat)
     const tagName = String(req.query.tag ?? "").trim();
     let tagsIdsRaw = req.query["tags[]"] ?? req.query.tags;
     const hasTagsIds = Array.isArray(tagsIdsRaw)
@@ -1379,9 +1393,13 @@ app.get(
       params.push(mtpQ);
     }
 
-    // mês (YYYY-MM) — usa a data de vencimento da parcela
+    // mês
     if (month && month !== "all") {
-      clauses.push(`to_char(i.due_date at time zone 'UTC','YYYY-MM') = $${i++}`);
+      if (view === "compras") {
+        clauses.push(`to_char(p.emissao at time zone 'UTC','YYYY-MM') = $${i++}`);
+      } else {
+        clauses.push(`to_char(i.due_date at time zone 'UTC','YYYY-MM') = $${i++}`);
+      }
       params.push(month);
     }
 
@@ -1391,6 +1409,7 @@ app.get(
       select
         p.id,
         p.created_by,
+        p.created_by_user_id,
         p.estabelecimento,
         i.due_date as emissao,
         p.tag,                      -- legado (fica null nas novas)
@@ -1439,6 +1458,8 @@ app.get(
         id: row.id,
         row_key: row.row_key,
         createdBy: row.created_by,
+        
+        created_by_user_id: row.created_by_user_id,
         estabelecimento: row.estabelecimento,
         emissao: toISO(row.emissao),
         tag: row.tag, // legado
@@ -1469,17 +1490,55 @@ app.delete(
   authMiddleware,
   asyncHandler(async (req, res) => {
     const { id } = req.params;
+
+    // Verifica acesso e família ativa
+    const access = await getAccessState(req.user.id);
+    if (!access?.allowed || !access?.family?.id) {
+      return res.status(403).json({ error: "no_family_access" });
+    }
+    const activeFamilyId = access.family.id;
+    const isOwner = access.family.role === 'owner';
+
     try {
-      await pool.query("delete from purchases where id=$1", [id]);
+      // Carrega a compra e confere a família
+      const r = await pool.query(
+        "select id, family_id, created_by_user_id from purchases where id=$1 limit 1",
+        [id]
+      );
+      if (r.rowCount === 0) return res.status(404).json({ error: "not_found" });
+      const p = r.rows[0];
+      if (String(p.family_id) !== String(activeFamilyId)) {
+        return res.status(403).json({ error: "forbidden" });
+      }
+
+      // Permissão: dono da família OU autor da compra
+      const isAuthor = String(p.created_by_user_id) === String(req.user.id);
+      if (!isOwner && !isAuthor) {
+        return res.status(403).json({ error: "forbidden" });
+      }
+
+      // Exclui dependências e a compra (compatível com bancos sem ON DELETE CASCADE)
+      const client = await pool.connect();
+      try {
+        await client.query('begin');
+        await client.query('delete from purchase_tags where purchase_id=$1', [id]);
+        await client.query('delete from purchase_items where purchase_id=$1', [id]);
+        await client.query('delete from installments where purchase_id=$1', [id]);
+        await client.query('delete from purchases where id=$1 and family_id=$2', [id, activeFamilyId]);
+        await client.query('commit');
+      } catch (err) {
+        await client.query('rollback');
+        throw err;
+      } finally {
+        client.release();
+      }
       return res.json({ ok: true, removed: 1 });
     } catch (e) {
       console.error(e);
       return res.status(500).json({ error: "Erro ao deletar (DB)" });
     }
   })
-);
-
-// Export CSV (ledger)
+);// Export CSV (ledger)
 app.get(
   "/api/export.csv",
   authMiddleware,
@@ -1517,7 +1576,7 @@ app.get(
       const where = whereClauses.length ? "where " + whereClauses.join(" and ") : "";
 
       const sql = `
-        select p.id as purchase_id, p.created_by as usuario, p.estabelecimento, p.tag,
+        select p.id as purchase_id, p.created_by as usuario, p.created_by_user_id, p.estabelecimento, p.tag,
                coalesce(p.mtp,'') as mtp, p.emissao,
                i.due_date as vencimento, i.n, p.pagamento_parcelas, i.amount
         from purchases p
@@ -1751,8 +1810,7 @@ app.use((err, req, res, next) => {
   console.error("Unhandled error:", err);
   if (res.headersSent) return next(err);
   const status = err.status || 500;
-  const code =
-    err.code || (status >= 500 ? "server_error" : "request_error");
+  const code = err.code || (status >= 500 ? "server_error" : "request_error");
   const msg = typeof err === "string" ? err : err.message || "server_error";
   res.status(status).json({ error: msg, code, requestId: req.id });
 });
