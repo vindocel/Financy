@@ -1,0 +1,235 @@
+:root{
+  color-scheme: light dark;
+  --bg:#0b1220; --fg:#e2e8f0; --muted:#94a3b8; --primary:#8b5cf6;
+  --card:#0f172a; --border:#1f2937; --focus:#22d3ee; --btn-h:36px;
+  --panel: var(--card);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,.35);
+}
+
+/* base */
+*{ box-sizing:border-box }
+html,body,#root{ height:100% }
+body{
+  margin:0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji';
+  background:var(--bg); color:var(--fg);
+}
+a{ color:var(--primary); text-decoration:none }
+input,select,button{ font:inherit }
+label{ display:block; font-size:.9rem; margin-bottom:.25rem }
+input:not([type="checkbox"]):not([type="radio"]), select{
+  width:100%; padding:.6rem .7rem; border-radius:.5rem;
+  border:1px solid var(--border); background:#0b1327; color:var(--fg);
+}
+button{ padding:.6rem .9rem; border:1px solid var(--border); background:#0f172a; color:var(--fg); border-radius:.6rem; cursor:pointer }
+button.primary{ background:var(--primary); border-color:transparent; color:#fff }
+
+/* layout */
+.container{ max-width:960px; margin:0 auto; padding:1rem }
+.card{ background:var(--card); border:1px solid var(--border); border-radius:.75rem; padding:1rem }
+.row{ display:flex; gap:.75rem; align-items:center }
+.col{ display:flex; flex-direction:column; gap:.5rem }
+.grid{ display:grid; gap:.75rem }
+.grid.cols-2{ grid-template-columns:repeat(2,minmax(0,1fr)) }
+.grid.cols-3{ grid-template-columns:repeat(3,minmax(0,1fr)) }
+
+.header{
+  display:flex; align-items:center; justify-content:space-between; gap:1rem;
+  padding:.75rem 1rem; position:sticky; top:0; background:var(--bg);
+  border-bottom:1px solid var(--border); z-index:10;
+}
+.title{ font-weight:600 }
+.menu{ display:flex; gap:.5rem; align-items:center }
+.header .menu button{ height:var(--btn-h); padding:0 .9rem; display:inline-flex; align-items:center; justify-content:center }
+.header .menu .btn-icon{ width:var(--btn-h); min-width:var(--btn-h); padding:0; }
+
+.filters{ position:sticky; top:52px; z-index:5; }
+.field{ margin-bottom:.5rem }
+.error{ color:#f87171; font-size:.9rem; margin-top:.25rem }
+.muted{ color:var(--muted) }
+.dropdown{ position:relative }
+
+@media (max-width:740px){
+  .grid.cols-2{ grid-template-columns:1fr }
+  .grid.cols-3{ grid-template-columns:1fr }
+}
+
+/* dropdown visual base */
+.dropdown-panel{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:.75rem;
+  box-shadow:var(--shadow-lg);
+}
+
+/* ===== Selectores (usuários e tags) ===== */
+
+/* trigger com cara de input */
+.selector .selector-trigger{
+  display:flex; align-items:center; gap:.35rem;
+  min-height:40px; padding:6px 10px;
+  width:100%; min-width:0;
+  border:1px solid var(--border);
+  border-radius:.5rem;
+  background:#0b1327; color:var(--fg);
+  justify-content:space-between;
+}
+.selector .selector-value{ flex:1 1 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.selector .selector-trigger .chev{ margin-left:.5rem; opacity:.7; }
+
+/* largura igual à de Usuários e trigger estático */
+.filters .grid .field{ min-width:0; width:100%; }
+.filters .grid .field .selector{ width:100%; }
+.filters .grid .field .selector .selector-trigger{ width:100%; }
+.selector .selector-trigger{ flex-wrap: nowrap; } /* não quebra linha */
+
+/* menu do seletor (quando não é portal, ex.: Usuários) */
+.selector .dropdown-panel{
+  position:absolute; left:0; right:0; top:calc(100% + 6px);
+  z-index:50; min-width:100%; max-width:100%;
+}
+
+/* itens do menu em linhas (Usuários) */
+.dropdown-panel .col label.row{
+  display:flex; align-items:center; justify-content:flex-start;
+  gap:.5rem; min-height:36px; padding:8px 10px; cursor:pointer;
+}
+.dropdown-panel .col label.row > input[type="checkbox"]{ flex:0 0 auto; margin:0; }
+.dropdown-panel .col label.row > span{
+  flex:1 1 auto; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.dropdown-panel .col label.row + label.row{ border-top:1px solid var(--border); }
+
+/* ===== Chips (cinza) — usados por Usuários em outros lugares ===== */
+.chip{
+  display:inline-flex; align-items:center; gap:.35rem;
+  padding:.25rem .6rem; border-radius:.6rem;
+  border:1px solid var(--border); background:#111827; color:var(--fg);
+  font-size:.85rem;
+}
+.chip .x{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:18px; height:18px; border:none; background:transparent; color:inherit; opacity:.8; border-radius:.25rem; cursor:pointer;
+}
+.chip .x:hover{ opacity:1; background:rgba(255,255,255,.12); }
+
+/* ===== Pílulas coloridas (para exibição geral de tags em cards/tabelas) ===== */
+.tag-pill{
+  --tag:#64748b;
+  display:inline-flex; align-items:center; gap:.35rem;
+  font-size:.85rem; line-height:1; padding:.25rem .5rem;
+  border-radius:.375rem; border:1px solid transparent;
+  background:var(--tag);
+  color:#fff;
+  cursor:default; user-select:none;
+}
+
+/* ===== TagMultiSelect (menu via portal em <body>) ===== */
+
+/* chips coloridas DENTRO DO CAMPO (na linha do trigger) */
+.selector .selector-value.tagchips-inline{
+  display:flex; align-items:center; gap:6px;
+  overflow:hidden; white-space:nowrap;
+}
+.selector .selector-value.tagchips-inline .placeholder{
+  overflow:hidden; text-overflow:ellipsis;
+}
+.tag-chip-mini{
+  --tag:#64748b;
+  flex:0 0 auto;
+  padding:2px 8px;
+  border-radius:.5rem;
+  font-size:.85rem; line-height:1.1;
+  background: var(--tag);
+  color:#fff;
+  border:1px solid transparent;
+}
+
+/* popover das Tags por cima do formulário (portal) */
+.tagms-popover{
+  position: fixed; z-index: 4000;
+  max-height: 260px; overflow-y: auto;
+}
+.tagms-popover .dropdown-panel{
+  position: static; min-width:100%; max-width:100%; width:auto; padding:8px;
+}
+
+/* menu de tags como BADGES coloridas lado-a-lado */
+.tagms-badges{
+  display:flex; flex-wrap:wrap; gap:8px;
+}
+.tag-badge{
+  --tag:#64748b;
+  display:inline-flex; align-items:center; gap:6px;
+  padding:2px 10px; font-size:.875rem; line-height:1.1;
+  border-radius:.5rem;
+  border:1px solid transparent;
+  background: var(--tag);
+  color:#fff;
+  cursor:pointer; user-select:none;
+}
+.tag-badge:hover{ filter: brightness(1.05); }
+.tag-badge.selected{
+  filter: brightness(0.95);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.2);
+}
+.tag-badge .x{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:16px; height:16px; border-radius:2px; opacity:.9;
+}
+
+/* o campo não deve cortar popovers */
+.filters .field, .card.modal .field{ overflow:visible }
+
+/* ===== Dialog (modal padrão) ===== */
+.sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0 }
+dialog::backdrop{ background:rgba(0,0,0,.5) }
+dialog[open]{ position:fixed; inset:0; display:grid; place-items:center; padding:0; background:transparent; border:none; z-index:2000; }
+dialog{ border:none; border-radius:.75rem; padding:0; background:transparent }
+dialog .modal{ width:min(780px,96vw); max-height:88vh; overflow:auto; }
+.actions{ display:flex; align-items:center; gap:.5rem }
+
+/* ===== Tabelas ===== */
+.table{ width:100%; border-collapse:separate; border-spacing:0; }
+.table thead th{ text-align:left; font-size:.95rem; color:var(--muted); padding:10px 12px; border-bottom:1px solid var(--border); }
+.table tbody td{ padding:12px; vertical-align:middle; }
+.table tbody tr + tr td{ border-top:1px solid var(--border); }
+.table tbody tr:hover{ background:rgba(255,255,255,.03) }
+.table td.num{ text-align:right; white-space:nowrap; }
+.table th.num,.table td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+
+/* ===== Inputs com ações (mostrar/copiar) ===== */
+.input-with-actions{ position:relative; }
+.input-with-actions > input{ padding-right:110px; }
+.input-actions{
+  position:absolute; top:1px; right:1px; bottom:1px;
+  display:flex; gap:0; align-items:center; background:transparent;
+}
+.input-with-actions .icon-btn{ border:0; background:transparent; }
+.input-actions .input-action{
+  position:static; transform:none; height:100%; width:42px; padding:0; border-radius:0; border:0; background:transparent;
+  display:inline-flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.input-actions .input-action + .input-action{ border-left:1px solid var(--border); }
+.input-actions .input-action:hover{ background:rgba(255,255,255,.05) }
+.input-with-actions .icon-btn svg{ width:24px; height:24px; }
+.input-actions .input-action svg{ width:20px; height:20px; color:currentColor; }
+@media (prefers-color-scheme:light){
+  .input-actions .input-action:hover{ background:rgba(0,0,0,.05) }
+}
+
+/* ===== Avatar menu ===== */
+.avatar-btn{ display:inline-flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:10px; border:1px solid var(--border); background:#0f172a; }
+.avatar-wrap{ position:relative; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; }
+.avatar-img{ width:28px; height:28px; border-radius:9999px; display:block; }
+.avatar-fallback{ width:28px; height:28px; border-radius:9999px; display:inline-grid; place-items:center; font-weight:600; background:#111827; }
+.avatar-overlay{ position:fixed; inset:0; z-index:2900; background:transparent; }
+.avatar-menu{ position:fixed; z-index:3000; min-width:220px; border:1px solid var(--border); background:#0f172a; border-radius:12px; padding:6px; box-shadow:0 10px 35px rgba(0,0,0,.35); }
+.avatar-header{ display:flex; gap:.6rem; align-items:center; padding:8px; border-bottom:1px solid var(--border); margin-bottom:4px; }
+.avatar-header .name{ display:block; }
+.avatar-header .email{ display:block; font-size:.85rem; color:#94a3b8; }
+.avatar-item{ display:block; width:100%; text-align:left; padding:10px 12px; border-radius:10px; }
+.avatar-item:hover{ background:rgba(255,255,255,.04) }
+.avatar-sep{ height:1px; background:var(--border); margin:4px 0; }
+.avatar-back{ display:block; width:100%; text-align:left; padding:8px 12px; margin-bottom:6px; color:#94a3b8; }
+

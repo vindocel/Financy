@@ -8,6 +8,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 import dotenv from "dotenv";
+import ImageKit from "imagekit";
 import { importFromParsedJson, fetchFromQrCode } from "./services/nfceService.js";
 import { sendEmail } from "./services/emailService.js";
 import { randomUUID, createHash } from "crypto";
@@ -72,6 +73,24 @@ console.log("🗄️ DB: PostgreSQL habilitado");
 
 // ====== Middlewares base ======
 app.use(express.json({ limit: "2mb" }));
+
+// ====== ImageKit Auth Route ======
+const imagekit = new ImageKit({
+  publicKey: process.env.IMAGEKIT_PUBLIC_KEY || "",
+  privateKey: process.env.IMAGEKIT_PRIVATE_KEY || "",
+  urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || "",
+});
+
+app.get("/api/imagekit/auth", (req, res) => {
+  try {
+    const auth = imagekit.getAuthenticationParameters();
+    res.json({ ...auth, publicKey: process.env.IMAGEKIT_PUBLIC_KEY, folder: process.env.IMAGEKIT_DEFAULT_FOLDER || "/avatars" });
+  } catch (e) {
+    console.error("[imagekit-auth] error:", e);
+    res.status(500).json({ error: "auth_failed" });
+  }
+});
+
 
 // Per-request id + basic security header
 app.use((req, res, next) => {
@@ -640,8 +659,18 @@ app.get(
       if (r.rowCount > 0) {
         const u = r.rows[0];
         const access = await getAccessState(u.id);
-        return res.json({
+        
+        let avatarUrl = null;
+        try {
+          const hasCol = await tableHasColumn("users","avatar_url");
+          if (hasCol) {
+            const a = await pool.query("select avatar_url from users where id=$1",[u.id]);
+            avatarUrl = a.rows?.[0]?.avatar_url || null;
+          }
+        } catch {}
+return res.json({
           id: u.id,
+          avatar_url: avatarUrl,
           username: u.username,
           displayName: u.display_name || u.username,
           email: u.email,
@@ -653,8 +682,7 @@ app.get(
       console.warn("/api/me error:", e?.message || e);
     }
     const access = await getAccessState(req.user.id);
-    return res.json({
-      id: req.user.id,
+    return res.json({ id: req.user.id, avatar_url: null,
       username: req.user.username,
       displayName: req.user.displayName,
       email: req.user.email,
@@ -664,6 +692,44 @@ app.get(
   })
 );
 
+
+app.patch(
+  "/api/me",
+  authMiddleware,
+  asyncHandler(async (req, res) => {
+    try {
+      const display_name = typeof req.body?.display_name === "string" ? req.body.display_name.trim() : undefined;
+      const email = typeof req.body?.email === "string" ? req.body.email.trim() : undefined;
+      const avatar_url = typeof req.body?.avatar_url === "string" ? req.body.avatar_url.trim() : undefined;
+
+      // ensure avatar_url column exists if needed
+      if (avatar_url !== undefined) {
+        try {
+          const hasCol = await tableHasColumn("users", "avatar_url");
+          if (!hasCol) {
+            await pool.query('alter table if exists users add column if not exists avatar_url text');
+          }
+        } catch {}
+      }
+      const sets = [];
+      const vals = [];
+      let idx = 1;
+      if (display_name !== undefined) { sets.push(`display_name=$${idx++}`); vals.push(display_name); }
+      if (email !== undefined)       { sets.push(`email=$${idx++}`); vals.push(email); }
+      if (avatar_url !== undefined)  { sets.push(`avatar_url=$${idx++}`); vals.push(avatar_url); }
+
+      if (sets.length === 0) return res.status(400).json({ error: "no_fields" });
+
+      vals.push(req.user.id);
+      const sql = `update users set ${sets.join(", ")}, updated_at=now() where id=$${idx} returning id`;
+      await pool.query(sql, vals);
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error("PATCH /api/me error:", e);
+      return res.status(500).json({ error: "update_failed" });
+    }
+  })
+);
 app.post(
   "/api/me/password",
   authMiddleware,
@@ -845,22 +911,7 @@ async function getActiveFamilyIdOrNull(userId) {
     LIMIT 1`;
   try {
     const { rows } = await pool.query(q, [userId]);
-    if (rows && rows[0]?.family_id) return rows[0].family_id;
-    // fallback legacy (username)
-    const u = await pool.query("select username from users where id=$1", [userId]);
-    const uname = u.rows[0]?.username;
-    if (!uname) return null;
-    const q2 = `
-      SELECT fm.family_id
-        FROM family_members fm
-        JOIN families f ON f.id = fm.family_id
-       WHERE fm.username = $1
-         AND fm.is_active = TRUE
-         AND f.status = 'active'
-       ORDER BY fm.created_at NULLS LAST, fm.family_id
-       LIMIT 1`;
-    const r2 = await pool.query(q2, [uname]);
-    return r2.rows[0]?.family_id || null;
+  if (rows && rows[0]?.family_id) return rows[0].family_id;
   } catch (e) {
     console.warn("getActiveFamilyIdOrNull error:", e?.message || e);
     return null;
@@ -1039,16 +1090,7 @@ app.post(
         [r.family_id, r.user_id]
       );
     } catch {}
-    try {
-      const u = await pool.query(`select username from users where id=$1`, [r.user_id]);
-      const uname = u.rows[0]?.username || r.username;
-      if (uname)
-        await pool.query(
-          `update family_members set is_active=true where family_id=$1 and username=$2`,
-          [r.family_id, uname]
-        );
-    } catch {}
-    // Evita duplicadas mesmo sem índice único
+// Evita duplicadas mesmo sem índice único
     try {
       await pool.query(
         `insert into family_members (family_id, user_id, role, is_active, created_at)
@@ -1057,19 +1099,8 @@ app.post(
         [r.family_id, r.user_id]
       );
     } catch {}
-    try {
-      const u2 = await pool.query(`select username from users where id=$1`, [r.user_id]);
-      const uname2 = u2.rows[0]?.username || r.username;
-      if (uname2)
-        await pool.query(
-          `insert into family_members (family_id, username, role, is_active, created_at)
-           select $1, $2, 'member', true, now()
-           where not exists (select 1 from family_members where family_id=$1 and username=$2)`,
-          [r.family_id, uname2]
-        );
-    } catch (eIns2) {
-      console.warn("family_members insert fallback failed:", eIns2?.message || eIns2);
-    }
+    
+
     try {
       await pool.query(
         `update join_requests set status='approved', decided_by_user_id=$1, decided_at=now()
@@ -1332,7 +1363,10 @@ app.get(
     const userParam = req.query.user ?? "me";
     const mtpQ = normalizeMtp(req.query.mtp || "");
     const { month } = req.query;
-    const view = String(req.query.view || "parcelas"); // 'parcelas' (default) ou 'compras'
+    const view = String(req.query.view || "parcelas"); 
+    const emissaoField = view === "compras" ? "p.emissao" : "i.due_date";
+    const orderEmissao = emissaoField;
+// 'parcelas' (default) ou 'compras'
 
     // tags: ids via tags[] e nome via tag (compat)
     const tagName = String(req.query.tag ?? "").trim();
@@ -1411,7 +1445,7 @@ app.get(
         p.created_by,
         p.created_by_user_id,
         p.estabelecimento,
-        i.due_date as emissao,
+        ${emissaoField} as emissao,
         p.tag,                      -- legado (fica null nas novas)
         coalesce(p.mtp,'') as mtp,
         p.discount,
@@ -1446,10 +1480,10 @@ app.get(
 
       ${where}
       group by
-        p.id, p.created_by, p.estabelecimento, i.due_date, p.tag, p.mtp,
+        p.id, p.created_by, p.estabelecimento, ${emissaoField}, p.tag, p.mtp,
         p.discount, p.total, p.pagamento_tipo, p.pagamento_parcelas,
         i.n, i.amount
-      order by i.due_date asc, p.id asc, i.n asc
+      order by ${orderEmissao} asc, p.id asc, i.n asc
     `;
 
     try {
